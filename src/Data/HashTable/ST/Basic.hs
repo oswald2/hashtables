@@ -168,7 +168,8 @@ data HashTable_ s k v = HashTable
     , _values :: {-# UNPACK #-} !(MutableArray s v)
     }
 
-
+-- | An immutable hash table which can be obtained by
+-- freezing a 'HashTable'.
 data IHashTable k v = IHashTable {
     _isize   :: {-# UNPACK #-} !Int
   , _iload   :: !ISizeRefs   -- ^ 2-element array, stores how many entries
@@ -871,8 +872,7 @@ unsafeFreeze htRef = do
     }
 
 
--- | See the documentation for this function in
--- 'Data.HashTable.Class.lookup'.
+-- | Does a lookup in a immutable hash table 'IHashTable'
 ilookup :: (Eq k, Hashable k) => (IHashTable k v) -> k -> Maybe v
 ilookup ht !k = lookup' ht
   where
@@ -919,7 +919,7 @@ ilookup ht !k = lookup' ht
                            else go (idx + 1) start end
 {-# INLINE ilookup #-}
 
-
+-- | folds over a immutable 'IHashTable'
 fold :: (a -> (k,v) -> a) -> a -> IHashTable k v -> a
 fold f seed0 = work
   where
