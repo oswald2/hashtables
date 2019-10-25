@@ -4,6 +4,7 @@
 
 module Data.HashTable.Internal.IntArray
   ( IntArray
+  , IIntArray
   , Elem
   , elemMask
   , primWordToElem
@@ -14,6 +15,9 @@ module Data.HashTable.Internal.IntArray
   , writeArray
   , length
   , toPtr
+  , itoPtr
+  , unsafeFreezeIntArray
+  , ireadArray
   ) where
 
 ------------------------------------------------------------------------------
@@ -48,6 +52,14 @@ import           Prelude                  hiding (length)
 ------------------------------------------------------------------------------
 newtype IntArray s = IA (A.MutableByteArray s)
 type Elem = Word16
+
+-- | Immutable version of IntArray
+newtype IIntArray = IIA A.ByteArray
+
+-- | unsafely freezes the 'IntArray' into a 'IIntArray'
+unsafeFreezeIntArray :: IntArray s -> ST s IIntArray
+unsafeFreezeIntArray (IA arr) = IIA <$> A.unsafeFreezeByteArray arr
+
 
 
 ------------------------------------------------------------------------------
@@ -97,6 +109,9 @@ readArray (IA a) idx = do
     BOUNDS_CHECK(a,idx)
     A.readByteArray a idx
 
+ireadArray :: IIntArray -> Int -> Elem
+ireadArray (IIA a) idx = A.indexByteArray a idx
+
 
 ------------------------------------------------------------------------------
 writeArray :: IntArray s -> Int -> Elem -> ST s ()
@@ -118,4 +133,13 @@ toPtr (IA a) = Ptr a#
     !(Ptr !a#) = A.mutableByteArrayContents a
 #else
     !(Addr !a#) = A.mutableByteArrayContents a
+#endif
+
+itoPtr :: IIntArray -> Ptr a
+itoPtr (IIA a) = Ptr a#
+  where
+#if MIN_VERSION_primitive(0,7,0)
+    !(Ptr !a#) = A.byteArrayContents a
+#else
+    !(Addr !a#) = A.byteArrayContents a
 #endif

@@ -480,6 +480,66 @@ testNastyFullLookup prefix dummyArg = testCase (prefix ++ "/nastyFullLookup") go
       ]
 
 
+
+testNastyFullLookup2 :: HashTest
+testNastyFullLookup2 prefix dummyArg = testCase (prefix ++ "/nastyFullLookup2") go
+  where
+    go = do
+        tbl <- new
+        forceType tbl dummyArg
+        timeout_ 3000000 $ do
+            foldM_ (\t k -> applyAction t k >> return t) tbl testData
+            itbl <- unsafeFreeze tbl
+            let res = ilookup 66 itbl
+            print res
+
+    testData =
+      [ Insert 28
+      , Insert 27
+      , Insert 30
+      , Insert 31
+      , Insert 32
+      , Insert 33
+      , Insert 34
+      , Insert 29
+      , Insert 36
+      , Insert 37
+      , Delete 34
+      , Delete 29
+      , Insert 38
+      , Insert 39
+      , Insert 40
+      , Insert 35
+      , Delete 39
+      , Insert 42
+      , Insert 43
+      , Delete 40
+      , Delete 35
+      , Insert 44
+      , Insert 45
+      , Insert 41
+      , Insert 48
+      , Insert 47
+      , Insert 50
+      , Insert 51
+      , Insert 52
+      , Insert 49
+      , Insert 54
+      , Insert 53
+      , Insert 56
+      , Insert 55
+      , Insert 58
+      , Insert 57
+      , Insert 60
+      , Insert 59
+      , Delete 60
+      , Insert 62
+      , Insert 61
+      , Insert 63
+      , Insert 46
+      ]
+
+
 ------------------------------------------------------------------------------
 initializeRNG :: PropertyM IO GenIO
 initializeRNG = run $ withSystemRandom (return :: GenIO -> IO GenIO)

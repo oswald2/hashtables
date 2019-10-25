@@ -8,6 +8,7 @@ module Data.HashTable.Internal.CacheLine
   , cacheLineSearch2
   , cacheLineSearch3
   , forwardSearch2
+  , iforwardSearch2
   , forwardSearch3
   , isCacheLineAligned
   , advanceByCacheLineSize
@@ -21,9 +22,9 @@ module Data.HashTable.Internal.CacheLine
   ) where
 
 import           Control.Monad
-import           Control.Monad.ST                 (ST)
+import           Control.Monad.ST                 (ST, runST)
 
-import           Data.HashTable.Internal.IntArray (Elem, IntArray)
+import           Data.HashTable.Internal.IntArray (Elem, IntArray, IIntArray)
 import qualified Data.HashTable.Internal.IntArray as M
 
 #ifndef NO_C_SEARCH
@@ -96,6 +97,14 @@ forwardSearch2 !vec !start !end !x1 !x2 =
     liftM fromEnum $! unsafeIOToST c
   where
     c = c_forwardSearch_2 (M.toPtr vec) (fI start) (fI end) (fI x1) (fI x2)
+
+{-# INLINE iforwardSearch2 #-}
+iforwardSearch2 :: IIntArray -> Int -> Int -> Elem -> Elem -> Int
+iforwardSearch2 !vec !start !end !x1 !x2 =
+    fromEnum $! runST $ unsafeIOToST c
+  where
+    c = c_forwardSearch_2 (M.itoPtr vec) (fI start) (fI end) (fI x1) (fI x2)
+
 
 
 {-# INLINE forwardSearch3 #-}
@@ -222,6 +231,20 @@ forwardSearch2 !vec !start !end !x1 !x2 = go start end False
         if h == x1 || h == x2
           then return i
           else go (i+1) e b
+
+{-# INLINE iforwardSearch2 #-}
+iforwardSearch2 :: IntArray s -> Int -> Int -> Elem -> Elem -> Int
+iforwardSearch2 !vec !start !end !x1 !x2 = go start end False
+  where
+    go !i !e !b =
+      if i >= e then
+        if b then return (-1) else go 0 start True
+      else do
+        let h = M.ireadArray vec i in
+        if h == x1 || h == x2
+          then i
+          else go (i+1) e b
+
 
 
 {-# INLINE forwardSearch3 #-}

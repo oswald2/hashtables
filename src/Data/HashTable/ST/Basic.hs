@@ -82,6 +82,7 @@ application, you should choose the included linear hash table instead.
 
 module Data.HashTable.ST.Basic
   ( HashTable
+  , IHashTable
   , new
   , newSized
   , delete
@@ -92,6 +93,9 @@ module Data.HashTable.ST.Basic
   , mapM_
   , foldM
   , computeOverhead
+  , unsafeFreeze
+  , ilookup
+  , fold
   ) where
 
 
@@ -129,6 +133,9 @@ newtype HashTable s k v = HT (STRef s (HashTable_ s k v))
 
 type SizeRefs s = A.MutableByteArray s
 
+type ISizeRefs = A.ByteArray
+
+
 intSz :: Int
 intSz = (finiteBitSize (0::Int) `div` 8)
 
@@ -159,6 +166,16 @@ data HashTable_ s k v = HashTable
     , _hashes :: !(U.IntArray s)
     , _keys   :: {-# UNPACK #-} !(MutableArray s k)
     , _values :: {-# UNPACK #-} !(MutableArray s v)
+    }
+
+
+data IHashTable k v = IHashTable {
+    _isize   :: {-# UNPACK #-} !Int
+  , _iload   :: !ISizeRefs   -- ^ 2-element array, stores how many entries
+                            -- and deleted entries are in the table.
+  , _ihashes :: !U.IIntArray
+  , _ikeys   :: {-# UNPACK #-} !(Array k)
+  , _ivalues :: {-# UNPACK #-} !(Array v)
     }
 
 
@@ -833,3 +850,89 @@ nextByIndex htRef i0 = readRef htRef >>= work
                 let !i' = fromIntegral i
                 return (Just (i', k, v))
 {-# INLINE nextByIndex #-}
+
+
+-- | unsafely freezes the 'HashTable' and returns an immutable
+-- 'IHashTable'
+unsafeFreeze :: HashTable s k v -> ST s (IHashTable k v)
+unsafeFreeze htRef = do
+  ht <- readRef htRef
+  fSizeRefs <- A.unsafeFreezeByteArray (_load ht)
+  newHashes <- U.unsafeFreezeIntArray (_hashes ht)
+  newKeys <- Data.HashTable.Internal.Array.unsafeFreezeArray (_keys ht)
+  newValues <- Data.HashTable.Internal.Array.unsafeFreezeArray (_values ht)
+
+  return IHashTable {
+    _isize = _size ht
+    , _iload = fSizeRefs
+    , _ihashes = newHashes
+    , _ikeys = newKeys
+    , _ivalues = newValues
+    }
+
+
+-- | See the documentation for this function in
+-- 'Data.HashTable.Class.lookup'.
+ilookup :: (Eq k, Hashable k) => (IHashTable k v) -> k -> Maybe v
+ilookup ht !k = lookup' ht
+  where
+    lookup' (IHashTable sz _ hashes keys values) =
+        let !b = whichBucket h sz in
+        --debug $ "lookup h=" ++ show h ++ " sz=" ++ show sz ++ " b=" ++ show b
+        go b 0 sz
+
+      where
+        !h  = hash k
+        !he = hashToElem h
+
+        go !b !start !end = {-# SCC "ilookup/go" #-}
+            -- debug $ concat [ "lookup'/go: "
+            --                , show b
+            --                , "/"
+            --                , show start
+            --                , "/"
+            --                , show end
+            --                ]
+            let idx = iforwardSearch2 hashes b end he emptyMarker in
+            --debug $ "forwardSearch2 returned " ++ show idx
+            if idx < 0 || idx < start || idx >= end
+               then Nothing
+               else
+                 let h0 = U.ireadArray hashes idx in
+                 --debug $ "h0 was " ++ show h0
+
+                 if recordIsEmpty h0
+                   then
+                       --debug $ "record empty, returning Nothing"
+                       Nothing
+                   else
+                     let k' = ireadArray keys idx in
+                     if k == k'
+                       then
+                         --debug $ "value found at " ++ show idx
+                         let !v = ireadArray values idx in
+                         Just v
+                       else
+                         --debug $ "value not found, recursing"
+                         if idx < b
+                           then go (idx + 1) (idx + 1) b
+                           else go (idx + 1) start end
+{-# INLINE ilookup #-}
+
+
+fold :: (a -> (k,v) -> a) -> a -> IHashTable k v -> a
+fold f seed0 = work
+  where
+    work (IHashTable sz _ hashes keys values) = go 0 seed0
+      where
+        go !i !seed | i >= sz = seed
+                    | otherwise =
+            let h = U.ireadArray hashes i in
+            if recordIsEmpty h || recordIsDeleted h
+              then go (i+1) seed
+              else
+                let k = ireadArray keys i
+                    v = ireadArray values i
+                    !seed' = f seed (k, v)
+                in
+                go (i+1) seed'
