@@ -1,6 +1,7 @@
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE CPP          #-}
-{-# LANGUAGE MagicHash    #-}
+{-# LANGUAGE BangPatterns  #-}
+{-# LANGUAGE CPP           #-}
+{-# LANGUAGE MagicHash     #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 {-|
 
@@ -96,6 +97,7 @@ module Data.HashTable.ST.Basic
   , unsafeFreeze
   , ilookup
   , fold
+  , Data.HashTable.ST.Basic.toList
   ) where
 
 
@@ -126,6 +128,7 @@ import           Data.HashTable.Internal.IntArray  (Elem)
 import qualified Data.HashTable.Internal.IntArray  as U
 import           Data.HashTable.Internal.Utils
 
+import           GHC.Generics
 
 ------------------------------------------------------------------------------
 -- | An open addressing hash table using linear probing.
@@ -177,8 +180,11 @@ data IHashTable k v = IHashTable {
   , _ihashes :: !U.IIntArray
   , _ikeys   :: {-# UNPACK #-} !(Array k)
   , _ivalues :: {-# UNPACK #-} !(Array v)
-    }
+    } deriving (Generic)
 
+
+instance (Show k, Show v) => Show (IHashTable k v) where 
+  show = show . Data.HashTable.ST.Basic.toList
 
 ------------------------------------------------------------------------------
 instance C.HashTable HashTable where
@@ -873,7 +879,7 @@ unsafeFreeze htRef = do
 
 
 -- | Does a lookup in a immutable hash table 'IHashTable'
-ilookup :: (Eq k, Hashable k) => (IHashTable k v) -> k -> Maybe v
+ilookup :: (Eq k, Hashable k) => IHashTable k v -> k -> Maybe v
 ilookup ht !k = lookup' ht
   where
     lookup' (IHashTable sz _ hashes keys values) =
@@ -936,3 +942,11 @@ fold f seed0 = work
                     !seed' = f seed (k, v)
                 in
                 go (i+1) seed'
+
+
+-- | Given a immutable hash table, produce a list of key-value pairs. /O(n)/.
+toList :: IHashTable k v -> [(k,v)]
+toList = fold f []
+  where
+    f !l !t = (t:l)
+{-# INLINE toList #-}
