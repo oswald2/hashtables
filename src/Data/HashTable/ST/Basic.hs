@@ -86,6 +86,7 @@ module Data.HashTable.ST.Basic
   , IHashTable
   , new
   , newSized
+  , size
   , delete
   , lookup
   , insert
@@ -226,7 +227,6 @@ newSized n = do
     newRef ht
 {-# INLINE newSized #-}
 
-
 ------------------------------------------------------------------------------
 newSizedReal :: Int -> ST s (HashTable_ s k v)
 newSizedReal m = do
@@ -239,6 +239,14 @@ newSizedReal m = do
     v  <- newArray m undefined
     ld <- newSizeRefs
     return $! HashTable m ld h k v
+
+------------------------------------------------------------------------------
+-- | Returns the number of mappings currently stored in this table. /O(1)/
+size :: HashTable s k v -> ST s Int
+size htRef = do
+    HashTable _ sizeRefs _ _ _ <- readRef htRef
+    readLoad sizeRefs
+{-# INLINE size #-}
 
 
 ------------------------------------------------------------------------------
@@ -535,15 +543,19 @@ newtype Slot = Slot { _slot :: Int } deriving (Show)
 
 #if MIN_VERSION_base(4,9,0)
 instance Semigroup Slot where
- (<>) = mappend
+  (<>) = slotMappend
 #endif
 
 instance Monoid Slot where
-    mempty = Slot maxBound
-    (Slot x1) `mappend` (Slot x2) =
-        let !m = mask x1 maxBound
-        in Slot $! (complement m .&. x1) .|. (m .&. x2)
+  mempty = Slot maxBound
+#if ! MIN_VERSION_base(4,11,0)
+  mappend = slotMappend
+#endif
 
+slotMappend :: Slot -> Slot -> Slot
+slotMappend (Slot x1) (Slot x2) =
+  let !m = mask x1 maxBound
+  in Slot $! (complement m .&. x1) .|. (m .&. x2)
 
 ------------------------------------------------------------------------------
 -- findSafeSlots return type

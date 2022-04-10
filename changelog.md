@@ -1,5 +1,27 @@
 # Hashtables changelog
 
+## 1.3
+
+Support Hashable 1.4. This new version of Hashable drops the Eq constraint, so the Eq constraint
+needs to be dropped in the SPECIALIZE statements in Hashtables.
+
+## 1.2.4.2
+
+Cabal file: add missing other-modules
+Silence import warnings. Know that we require ghc >= 7.8.
+Fix build with GHC 9.2
+
+## 1.2.4.1
+
+Update some test suite dep upper bounds.
+
+## 1.2.4.0
+
+ - Fix a [correctness bug](https://github.com/gregorycollins/hashtables/issues/55)
+with cuckoo hash tables and the new `mutate` function introduced in 1.2.3.0.
+
+ - Bring test suite into main .cabal file
+
 ## 1.2.3.4
 
 Fix build with GHC 8.8.
