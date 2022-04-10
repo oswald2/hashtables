@@ -21,3 +21,5 @@ test/dist
 test/dist/**
 .ghc*
 src/Data/HashTable/ST/Basic.hs.orig
+.gitignore.orig
+src/Data/HashTable/Internal/IntArray.hs.orig
