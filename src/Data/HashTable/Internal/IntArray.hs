@@ -142,7 +142,7 @@ itoPtr (IIA a) = Ptr a#
     !(Ptr !a#) = A.byteArrayContents a
 #else
     !(Addr !a#) = A.byteArrayContents a
-    
+#endif     
     
     
 #if MIN_VERSION_base(4,16,0)
