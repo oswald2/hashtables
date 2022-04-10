@@ -11,7 +11,10 @@ module Data.HashTable.Test.Common
   ) where
 
 ------------------------------------------------------------------------------
-import           Control.Applicative                  (pure, (<|>))
+#if !MIN_VERSION_base(4,8,0)
+import           Control.Applicative                  (pure, (<$>))
+#endif
+import           Control.Applicative                  ((<|>))
 import           Control.Monad                        (foldM_, liftM, when)
 import qualified Control.Monad                        as Monad
 import           Data.IORef
@@ -26,11 +29,13 @@ import           System.Timeout
 import           Test.Framework
 import           Test.Framework.Providers.HUnit
 import           Test.Framework.Providers.QuickCheck2
-import           Test.HUnit                           (assertFailure)
+import           Test.HUnit                           (assertEqual,
+                                                       assertFailure)
 import           Test.QuickCheck                      (arbitrary, choose,
                                                        sample')
-import           Test.QuickCheck.Monadic              (PropertyM, assert, pre,
-                                                       forAllM, monadicIO, run)
+import           Test.QuickCheck.Monadic              (PropertyM, assert,
+                                                       forAllM, monadicIO, pre,
+                                                       run)
 ------------------------------------------------------------------------------
 import qualified Data.HashTable.Class                 as C
 import           Data.HashTable.Internal.Utils        (unsafeIOToST)
@@ -104,6 +109,7 @@ tests prefix dummyArg = testGroup prefix $ map f ts
          , SomeTest testNastyFullLookup
          , SomeTest testForwardSearch3
          , SomeTest testMutate
+         , SomeTest testMutateGrow
          ]
 
 
@@ -323,6 +329,19 @@ testMutate prefix dummyArg = testProperty (prefix ++ "/mutate") $
         assertEq "mutate inserts correctly folded list value" s out2
         forceType dummyArg ht
 
+testMutateGrow :: HashTest
+testMutateGrow prefix dummyArg = testCase (prefix ++ "/mutateGrow") go
+  where
+    go = do
+        tbl <- new
+        forceType tbl dummyArg
+        timeout_ 3000000 $ do
+            let inputs = [0..128 :: Int]
+            Monad.mapM_ (mutIns tbl) inputs
+            l <- sort <$> toList tbl
+            let expected = map (\i -> (i, i)) inputs
+            assertEqual "mutate-grow" expected l
+    mutIns tbl i = mutate tbl i (const (Just i, ()))
 
 ------------------------------------------------------------------------------
 data Action = Lookup Int
@@ -542,14 +561,14 @@ testNastyFullLookup2 prefix dummyArg = testCase (prefix ++ "/nastyFullLookup2") 
 
 ------------------------------------------------------------------------------
 initializeRNG :: PropertyM IO GenIO
-initializeRNG = run $ withSystemRandom (return :: GenIO -> IO GenIO)
+initializeRNG = run createSystemRandom
 
 
 ------------------------------------------------------------------------------
 dedupe :: (Ord k, Ord v, Eq k) => [(k,v)] -> [(k,v)]
 dedupe l = go0 $ sort l
   where
-    go0 [] = []
+    go0 []     = []
     go0 (x:xs) = go id x xs
 
     go !dl !lastOne [] = (dl . (lastOne:)) []
